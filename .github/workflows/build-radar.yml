@@ -33,8 +33,7 @@ jobs:
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
         cd main-repo
-        # Mengubah /p:Platform=Win32 menjadi /p:Platform=x86 sesuai konfigurasi umum Visual Studio modern
-        msbuild radar-trilogy-sa.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
+        msbuild radar-trilogy-sa.sln /p:Configuration=Release /p:PlatformToolset=v143
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
