@@ -40,6 +40,7 @@
 #include "eWeaponType.h"
 #include "CRadar.h"
 #include "CAERadioTrackManager.h"
+#include "CAudioEngine.h"
 #ifdef _DEBUG
 #include <Psapi.h>
 #pragma comment(lib, "Psapi.lib")
@@ -1783,7 +1784,7 @@ void RadarRenderer::RenderRadioText()
 
     // Получаем текущую станцию
     // signed char radioId = AERadioTrackManager.m_TempSettings.m_nCurrentRadioStation;
-    signed char radioId = AERadioTrackManager.GetCurrentRadioStationID();
+    signed char radioId = AudioEngine.GetCurrentRadioStationID();
     
     // Если радио выключено (ID > 12 или < 0), не рисуем
     if (radioId < 0 || radioId > 12)
