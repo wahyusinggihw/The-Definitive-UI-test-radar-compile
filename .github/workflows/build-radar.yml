@@ -27,13 +27,31 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Project with Plugin SDK
+    - name: Generate Plugin SDK Headers
       run: |
+        # Mengatur variabel lingkungan plugin-sdk
         $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
+        # Pindah ke direktori pembantu plugin-sdk untuk men-generate file header yang hilang
+        cd plugin-sdk\tools\shared
+        # Membangun alat pembuat header internal bawaan SDK
+        msbuild tools.shared.sln /p:Configuration=Release /p:Platform=Win32
+        
+        # Kembali ke root dan jalankan utilitas pembuat header otomatis
+        cd ..\..
+        if (Test-Path "tools\shared\Release\tools.shared.exe") {
+            echo "Running headers generator..."
+            & "tools\shared\Release\tools.shared.exe"
+        } else {
+            echo "Warning: Headers generator tools not found, compilation might fail."
+        }
+
+    - name: Build Project with Plugin SDK
+      run: |
+        $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
+        
         cd main-repo
-        # Memaksa MSBuild menggunakan konfigurasi spesifik dari file .sln Anda
         msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143
 
     - name: Upload Build Artifacts
