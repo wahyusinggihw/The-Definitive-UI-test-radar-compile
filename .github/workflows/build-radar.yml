@@ -33,12 +33,15 @@ jobs:
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
         cd main-repo
-        msbuild radar-trilogy-sa.sln /p:Configuration=Release /p:PlatformToolset=v143
+        # Memaksa MSBuild menggunakan konfigurasi spesifik dari file .sln Anda
+        msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Compiled-Radar-ASI
         path: |
+          main-repo/**/Release GTA-SA/*.asi
+          main-repo/**/Release GTA-SA/*.dll
           main-repo/**/Release/*.asi
           main-repo/**/Release/*.dll
