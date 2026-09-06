@@ -27,19 +27,27 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Project with Plugin SDK Include Paths
+    - name: Pre-Build Plugin SDK Library
       run: |
-        # Mengatur path absolut dasar untuk SDK
+        $sdkPath = "$(Get-Location)\plugin-sdk"
+        $env:PLUGIN_SDK_DIR = $sdkPath
+        
+        # Kompilasi internal plugin-sdk agar menghasilkan berkas plugin.lib
+        cd plugin-sdk
+        msbuild plugin_sa.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
+
+    - name: Build Project with Plugin SDK
+      run: |
         $sdkPath = "$(Get-Location)\plugin-sdk"
         $env:PLUGIN_SDK_DIR = $sdkPath
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
-        # Menyusun string direktori include yang bersih untuk compiler C++
-        $includeDirs = "$sdkPath\shared;$sdkPath\plugin_sa;$sdkPath\plugin_sa\game_sa"
+        # Pengamanan tanda kutip luar-dalam agar MSBuild tidak memecah tanda titik koma (;)
+        $includeDirs = "${sdkPath}\shared;${sdkPath}\plugin_sa;${sdkPath}\plugin_sa\game_sa"
+        $libDirs = "${sdkPath}\output"
         
         cd main-repo
-        # Menggunakan AdditionalIncludeDirectories untuk menyuntikkan dependensi secara paksa dan aman
-        msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143 /p:AdditionalIncludeDirectories="$includeDirs"
+        msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143 /p:AdditionalIncludeDirectories="`"$includeDirs`"" /p:AdditionalLibraryDirectories="`"$libDirs`""
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
