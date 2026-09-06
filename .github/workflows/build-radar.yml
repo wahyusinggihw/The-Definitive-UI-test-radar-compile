@@ -32,10 +32,7 @@ jobs:
         shell: pwsh
         run: |
           $sdkPath = Join-Path $env:GITHUB_WORKSPACE "plugin-sdk"
-
-          "PLUGIN_SDK_DIR=$sdkPath" |
-            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-
+          "PLUGIN_SDK_DIR=$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
           Write-Host "PLUGIN_SDK_DIR = $sdkPath"
 
       - name: Check Plugin SDK Source
@@ -46,10 +43,7 @@ jobs:
           Write-Host "========================================"
           Write-Host "Plugin SDK path: $env:PLUGIN_SDK_DIR"
 
-          $enumPath = Join-Path `
-            $env:PLUGIN_SDK_DIR `
-            "Plugin_SA\game_sa\enums"
-
+          $enumPath = Join-Path $env:PLUGIN_SDK_DIR "Plugin_SA\game_sa\enums"
           if (Test-Path $enumPath) {
               Write-Host "Enum directory found: $enumPath"
           }
@@ -58,10 +52,7 @@ jobs:
               exit 1
           }
 
-          $generator = Join-Path `
-            $env:PLUGIN_SDK_DIR `
-            "tools\generate\Visual Studio.bat"
-
+          $generator = Join-Path $env:PLUGIN_SDK_DIR "tools\generate\Visual Studio.bat"
           if (Test-Path $generator) {
               Write-Host "Visual Studio generator found: $generator"
           }
@@ -96,32 +87,31 @@ jobs:
           Write-Host "VERIFYING GENERATED PLUGIN SDK PROJECT"
           Write-Host "========================================"
 
-          $solution = Join-Path $env:PLUGIN_SDK_DIR "plugin.sln"
+          Write-Host ""
+          Write-Host "Generated solution/project files:"
+          Write-Host "----------------------------------------"
 
-          if (Test-Path $solution) {
-              Write-Host "Plugin SDK solution found:"
-              Write-Host $solution
-          }
-          else {
-              Write-Error "plugin.sln was not generated."
-              Write-Host "Generated solution files:"
-              Get-ChildItem `
-                -Path $env:PLUGIN_SDK_DIR `
-                -Filter "*.sln" `
-                -Recurse `
-                -ErrorAction SilentlyContinue |
-                Select-Object -ExpandProperty FullName
+          Get-ChildItem -Path $env:PLUGIN_SDK_DIR -Recurse -File -Include *.sln,*.slnx,*.vcxproj -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+
+          Write-Host ""
+          Write-Host "Searching for Plugin_SA project:"
+          Write-Host "----------------------------------------"
+
+          $pluginSaProjects = @(Get-ChildItem -Path $env:PLUGIN_SDK_DIR -Recurse -File -Filter "Plugin_SA.vcxproj" -ErrorAction SilentlyContinue)
+
+          if ($pluginSaProjects.Count -eq 0) {
+              Write-Error "Plugin_SA.vcxproj was not found."
               exit 1
           }
 
+          foreach ($project in $pluginSaProjects) {
+              Write-Host "Found Plugin_SA:"
+              Write-Host $project.FullName
+          }
+
           Write-Host ""
-          Write-Host "Plugin SDK projects:"
-          Get-ChildItem `
-            -Path $env:PLUGIN_SDK_DIR `
-            -Filter "*.vcxproj" `
-            -Recurse `
-            -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
+          Write-Host "Plugin-SDK project generation verified successfully."
 
       - name: Build Plugin SDK - GTA San Andreas
         shell: cmd
@@ -155,27 +145,19 @@ jobs:
           Write-Host "VERIFYING PLUGIN SDK LIBRARY"
           Write-Host "========================================"
 
-          $pluginLib = Join-Path `
-            $env:PLUGIN_SDK_DIR `
-            "output\lib\plugin.lib"
-
+          $pluginLib = Join-Path $env:PLUGIN_SDK_DIR "output\lib\plugin.lib"
           Write-Host "Expected library:"
           Write-Host $pluginLib
 
           if (Test-Path $pluginLib) {
               Write-Host ""
               Write-Host "Plugin SDK library found."
-              Get-Item $pluginLib |
-                Format-List Name, Length, LastWriteTime
+              Get-Item $pluginLib | Format-List Name, Length, LastWriteTime
           }
           else {
               Write-Host ""
               Write-Host "Available plugin libraries:"
-              Get-ChildItem `
-                -Path $env:PLUGIN_SDK_DIR `
-                -Filter "plugin*.lib" `
-                -Recurse `
-                -ErrorAction SilentlyContinue |
+              Get-ChildItem -Path $env:PLUGIN_SDK_DIR -Filter "plugin*.lib" -Recurse -ErrorAction SilentlyContinue |
                 Select-Object FullName
 
               Write-Error "Required Plugin SDK library plugin.lib was not found."
@@ -185,9 +167,7 @@ jobs:
       - name: Patch Project Include Path
         shell: pwsh
         run: |
-          $projectFile = Join-Path `
-            $env:GITHUB_WORKSPACE `
-            "main-repo\radar-trilogy-sa.vcxproj"
+          $projectFile = Join-Path $env:GITHUB_WORKSPACE "main-repo\radar-trilogy-sa.vcxproj"
 
           if (-not (Test-Path $projectFile)) {
               Write-Error "Project file not found: $projectFile"
@@ -195,44 +175,23 @@ jobs:
           }
 
           $content = Get-Content $projectFile -Raw
-
           $oldPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;'
+          $newPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;' + '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
 
-          $newPath = `
-            '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;' +
-            '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
-
-          if (
-            $content.Contains(
-              '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
-            )
-          ) {
+          if ($content.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;')) {
               Write-Host "Enum include path already exists."
           }
           else {
-              $content = $content.Replace(
-                $oldPath,
-                $newPath
-              )
-
-              Set-Content `
-                -Path $projectFile `
-                -Value $content `
-                -Encoding UTF8
-
+              $content = $content.Replace($oldPath, $newPath)
+              Set-Content -Path $projectFile -Value $content -Encoding UTF8
               Write-Host "Added Plugin SDK enum include directory."
           }
 
           Write-Host ""
           Write-Host "Checking project include path..."
-
           $check = Get-Content $projectFile -Raw
 
-          if (
-            $check.Contains(
-              '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums'
-            )
-          ) {
+          if ($check.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums')) {
               Write-Host "Enum include path successfully added."
           }
           else {
@@ -248,7 +207,6 @@ jobs:
           Write-Host "========================================"
           Write-Host "BUILDING RADAR PROJECT"
           Write-Host "========================================"
-
           Write-Host "Configuration: Release GTA-SA"
           Write-Host "Platform: Win32"
           Write-Host "Platform Toolset: v145"
@@ -270,9 +228,7 @@ jobs:
       - name: Verify Build Output
         shell: pwsh
         run: |
-          $artifact = Join-Path `
-            $env:GITHUB_WORKSPACE `
-            "main-repo\bin\GTA-SA\Release\radar-trilogy-sa.asi"
+          $artifact = Join-Path $env:GITHUB_WORKSPACE "main-repo\bin\GTA-SA\Release\radar-trilogy-sa.asi"
 
           Write-Host "Expected artifact:"
           Write-Host $artifact
@@ -281,9 +237,7 @@ jobs:
               Write-Host ""
               Write-Host "BUILD SUCCESSFUL"
               Write-Host "ASI file found."
-
-              Get-Item $artifact |
-                Format-List Name, Length, LastWriteTime
+              Get-Item $artifact | Format-List Name, Length, LastWriteTime
           }
           else {
               Write-Error "radar-trilogy-sa.asi was not found."
