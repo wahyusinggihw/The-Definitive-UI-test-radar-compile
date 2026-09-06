@@ -5,42 +5,36 @@ on:
     branches: [ "only-radar-old" ]
   pull_request:
     branches: [ "only-radar-old" ]
+  workflow_dispatch: # <-- Baris ini ditambahkan agar tombol "Run workflow" muncul di GitHub
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    # 1. Unduh kode source proyek utama Anda
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         ref: only-radar-old
         path: main-repo
 
-    # 2. Unduh Plugin SDK (Dependensi Wajib)
     - name: Checkout Plugin SDK
       uses: actions/checkout@v4
       with:
         repository: DK22Pac/plugin-sdk
         path: plugin-sdk
 
-    # 3. Setup Compiler MSBuild (Visual Studio)
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 4. Set Environment Variable dan Compile Proyek
     - name: Build Project with Plugin SDK
       run: |
-        # Mengatur variabel lingkungan agar compiler tahu lokasi Plugin SDK
         $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
-        # Pindah ke folder proyek utama dan jalankan MSBuild
         cd main-repo
         msbuild radar-trilogy-sa.sln /p:Configuration=Release /p:Platform=Win32
 
-    # 5. Mengunggah file .asi / .dll hasil kompilasi agar bisa diunduh
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
