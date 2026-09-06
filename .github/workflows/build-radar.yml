@@ -27,32 +27,19 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Generate Plugin SDK Headers
+    - name: Build Project with Plugin SDK Include Paths
       run: |
-        # Mengatur variabel lingkungan plugin-sdk
-        $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
+        # Mengatur path absolut dasar untuk SDK
+        $sdkPath = "$(Get-Location)\plugin-sdk"
+        $env:PLUGIN_SDK_DIR = $sdkPath
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
-        # Pindah ke direktori pembantu plugin-sdk untuk men-generate file header yang hilang
-        cd plugin-sdk\tools\shared
-        # Membangun alat pembuat header internal bawaan SDK
-        msbuild tools.shared.sln /p:Configuration=Release /p:Platform=Win32
-        
-        # Kembali ke root dan jalankan utilitas pembuat header otomatis
-        cd ..\..
-        if (Test-Path "tools\shared\Release\tools.shared.exe") {
-            echo "Running headers generator..."
-            & "tools\shared\Release\tools.shared.exe"
-        } else {
-            echo "Warning: Headers generator tools not found, compilation might fail."
-        }
-
-    - name: Build Project with Plugin SDK
-      run: |
-        $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
+        # Menyusun string direktori include yang bersih untuk compiler C++
+        $includeDirs = "$sdkPath\shared;$sdkPath\plugin_sa;$sdkPath\plugin_sa\game_sa"
         
         cd main-repo
-        msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143
+        # Menggunakan AdditionalIncludeDirectories untuk menyuntikkan dependensi secara paksa dan aman
+        msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143 /p:AdditionalIncludeDirectories="$includeDirs"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
