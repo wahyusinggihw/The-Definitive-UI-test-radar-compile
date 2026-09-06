@@ -14,41 +14,44 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Checkout kode dari branch only-radar-old
+    # 1. Clone repository utama Anda (only-radar-old)
     - name: Checkout Main Repository
       uses: actions/checkout@v4
       with:
         ref: only-radar-old
 
-    # 2. Checkout plugin-sdk ke folder terpisah
+    # 2. Clone repository plugin-sdk secara paralel ke folder khusus
     - name: Checkout plugin-sdk
       uses: actions/checkout@v4
       with:
         repository: DK22Pac/plugin-sdk
         path: plugin-sdk
 
-    # 3. Setup MSBuild (Visual Studio) terbaru
+    # 3. Setup MSBuild (Visual Studio compiler tools)
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 4. Set Environment Variable wajib untuk plugin-sdk
+    # 4. Atur Variable Lingkungan wajib untuk plugin-sdk (Membantu VS mendeteksi SDK)
     - name: Set PLUGIN_SDK_DIR Environment Variable
       run: |
         echo "PLUGIN_SDK_DIR=${{ github.workspace }}\plugin-sdk" >> $GITHUB_ENV
       shell: bash
 
-    # 5. Proses Restore NuGet (diabaikan jika proyek tidak memakainya)
-    - name: Restore NuGet Packages
-      run: nuget restore ${{ github.workspace }}\radar-trilogy-sa.sln
-      continue-on-error: true
-
-    # 6. Kompilasi Proyek dengan konfigurasi 'Release GTA-SA' dan platform 'Win32'
-    - name: Build Solution
+    # 5. [OPSIONAL] Jika Anda memang wajib mengompilasi SDK-nya terlebih dahulu
+    # Menggunakan properti working-directory bawaan GitHub Actions agar aman dari error MSB1009
+    - name: Pre-build plugin_sa SDK
+      working-directory: ${{ github.workspace }}\plugin-sdk\plugin_sa
       run: |
-        msbuild ${{ github.workspace }}\radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32
+        msbuild plugin_sa.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
       shell: cmd
 
-    # 7. Mengambil dan menyimpan hasil kompilasi (.asi atau .dll)
+    # 6. Kompilasi Solusi Utama Anda
+    - name: Build Main Solution
+      run: |
+        msbuild ${{ github.workspace }}\radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143
+      shell: cmd
+
+    # 7. Ambil hasil kompilasi (.asi / .dll)
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
