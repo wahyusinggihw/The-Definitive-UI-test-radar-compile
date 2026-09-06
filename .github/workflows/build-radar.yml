@@ -110,7 +110,14 @@ jobs:
               Write-Host $project.FullName
           }
 
+          $solution = Join-Path $env:PLUGIN_SDK_DIR "plugin.slnx"
+          if (-not (Test-Path $solution)) {
+              Write-Error "Expected Plugin-SDK solution was not found: $solution"
+              exit 1
+          }
+
           Write-Host ""
+          Write-Host "Plugin-SDK solution found: $solution"
           Write-Host "Plugin-SDK project generation verified successfully."
 
       - name: Build Plugin SDK - GTA San Andreas
@@ -124,9 +131,10 @@ jobs:
           echo Configuration: Release
           echo Platform: Mixed Platforms
           echo Target: plugin_sa
+          echo Solution: plugin.slnx
           echo.
 
-          msbuild plugin.sln ^
+          msbuild plugin.slnx ^
             /property:Configuration=Release ^
             /property:Platform="Mixed Platforms" ^
             /target:plugin_sa ^
