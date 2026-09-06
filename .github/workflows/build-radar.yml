@@ -1,22 +1,21 @@
-name: Build Radar Trilogy SA
+name: Build Radar DLL
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - only-radar-old
+    branches: [ "only-radar-old" ]
+  pull_request:
+    branches: [ "only-radar-old" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-2025-vs2026
 
-    env:
-      PLUGIN_SDK_DIR: ${{ github.workspace }}\plugin-sdk
-
     steps:
-      - name: Checkout radar project
+      - name: Checkout Radar Project
         uses: actions/checkout@v4
         with:
+          ref: only-radar-old
           path: main-repo
 
       - name: Checkout Plugin SDK
@@ -28,257 +27,123 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Verify build environment
-        shell: powershell
+      - name: Set Plugin SDK Environment
+        shell: pwsh
         run: |
-          Write-Host "========================================"
-          Write-Host "BUILD ENVIRONMENT"
-          Write-Host "========================================"
+          $sdkPath = Join-Path $env:GITHUB_WORKSPACE "plugin-sdk"
+          "PLUGIN_SDK_DIR=$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-          Write-Host ""
-          Write-Host "PLUGIN_SDK_DIR:"
+          Write-Host "PLUGIN_SDK_DIR = $sdkPath"
+
+      - name: Check Plugin SDK
+        shell: pwsh
+        run: |
+          Write-Host "Plugin SDK path:"
           Write-Host $env:PLUGIN_SDK_DIR
 
           Write-Host ""
-          Write-Host "MSBuild version:"
-          msbuild -version
+          Write-Host "Checking required enum directory..."
 
-          Write-Host ""
-          Write-Host "Checking project files..."
+          $enumPath = Join-Path $env:PLUGIN_SDK_DIR "Plugin_SA\game_sa\enums"
 
-          if (-not (Test-Path "$env:GITHUB_WORKSPACE\main-repo\radar-trilogy-sa.sln")) {
-            throw "radar-trilogy-sa.sln was not found."
+          if (Test-Path $enumPath) {
+              Write-Host "Enum directory found:"
+              Write-Host $enumPath
+          }
+          else {
+              Write-Error "Enum directory not found!"
+              exit 1
           }
 
-          if (-not (Test-Path "$env:GITHUB_WORKSPACE\main-repo\radar-trilogy-sa.vcxproj")) {
-            throw "radar-trilogy-sa.vcxproj was not found."
-          }
-
-          Write-Host "Project files found."
-
-          Write-Host ""
-          Write-Host "Checking Plugin SDK..."
-
-          if (-not (Test-Path "$env:PLUGIN_SDK_DIR")) {
-            throw "Plugin SDK directory was not found."
-          }
-
-          Write-Host "Plugin SDK found."
-
-      - name: Inspect Plugin SDK
-        shell: powershell
+      - name: Patch Project Include Path
+        shell: pwsh
         run: |
-          Write-Host "========================================"
-          Write-Host "PLUGIN SDK"
-          Write-Host "========================================"
+          $projectFile = Join-Path $env:GITHUB_WORKSPACE "main-repo\radar-trilogy-sa.vcxproj"
 
-          Write-Host ""
-          Write-Host "SDK root:"
-          Get-ChildItem "$env:PLUGIN_SDK_DIR" |
-            Select-Object Name, Mode
+          if (-not (Test-Path $projectFile)) {
+              Write-Error "Project file not found: $projectFile"
+              exit 1
+          }
 
-          Write-Host ""
-          Write-Host "Checking output directory..."
+          $content = Get-Content $projectFile -Raw
 
-          if (Test-Path "$env:PLUGIN_SDK_DIR\output") {
-            Get-ChildItem "$env:PLUGIN_SDK_DIR\output" |
-              Select-Object Name, Mode
-          } else {
-            Write-Host "output directory does not exist yet."
+          $oldPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;'
+          $newPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
+
+          if ($content.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;')) {
+              Write-Host "Enum include path already exists."
+          }
+          else {
+              $content = $content.Replace($oldPath, $newPath)
+
+              Set-Content `
+                -Path $projectFile `
+                -Value $content `
+                -Encoding UTF8
+
+              Write-Host "Added Plugin SDK enum include directory."
           }
 
           Write-Host ""
-          Write-Host "Checking output/lib..."
+          Write-Host "Checking project include path..."
 
-          if (Test-Path "$env:PLUGIN_SDK_DIR\output\lib") {
-            Get-ChildItem "$env:PLUGIN_SDK_DIR\output\lib" -Filter "*.lib" |
-              Select-Object Name, Length
-          } else {
-            Write-Host "output/lib does not exist yet."
+          $check = Get-Content $projectFile -Raw
+
+          if ($check.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums')) {
+              Write-Host "Enum include path successfully added."
+          }
+          else {
+              Write-Error "Failed to add enum include path."
+              exit 1
           }
 
-      - name: Prepare Plugin SDK
-        shell: powershell
-        working-directory: plugin-sdk
+      - name: Build Radar Project
+        shell: pwsh
         run: |
-          Write-Host "========================================"
-          Write-Host "PREPARE PLUGIN SDK"
-          Write-Host "========================================"
+          cd "$env:GITHUB_WORKSPACE\main-repo"
 
-          $generator = ".\tools\generate\Visual Studio.bat"
-
-          if (Test-Path $generator) {
-            Write-Host "Visual Studio generator found."
-            Write-Host "Generating Visual Studio projects..."
-
-            cmd /c "`"$generator`""
-
-            if ($LASTEXITCODE -ne 0) {
-              throw "Plugin SDK Visual Studio project generation failed."
-            }
-
-            Write-Host "Plugin SDK project generation completed."
-          } else {
-            Write-Host "Visual Studio generator was not found."
-            Write-Host "Continuing with the existing SDK structure."
-          }
-
-      - name: Locate Plugin SDK solution
-        shell: powershell
-        working-directory: plugin-sdk
-        run: |
-          Write-Host "========================================"
-          Write-Host "LOCATE PLUGIN SDK SOLUTION"
-          Write-Host "========================================"
-
-          $solutions = Get-ChildItem `
-            -Path . `
-            -Filter "*.sln" `
-            -Recurse `
-            -ErrorAction SilentlyContinue
-
-          if ($solutions.Count -eq 0) {
-            Write-Host "No .sln files found in Plugin SDK."
-
-            Write-Host ""
-            Write-Host "Available project files:"
-            Get-ChildItem `
-              -Path . `
-              -Filter "*.vcxproj" `
-              -Recurse `
-              -ErrorAction SilentlyContinue |
-              Select-Object FullName
-
-            Write-Host ""
-            Write-Host "No Plugin SDK solution will be built automatically."
-          } else {
-            Write-Host "Found solution files:"
-            $solutions | Select-Object FullName
-          }
-
-      - name: Check existing Plugin SDK library
-        shell: powershell
-        run: |
-          Write-Host "========================================"
-          Write-Host "CHECK PLUGIN.LIB"
-          Write-Host "========================================"
-
-          $pluginLib = "$env:PLUGIN_SDK_DIR\output\lib\plugin.lib"
-
-          if (Test-Path $pluginLib) {
-            $file = Get-Item $pluginLib
-
-            Write-Host "plugin.lib found."
-            Write-Host "Path: $($file.FullName)"
-            Write-Host "Size: $($file.Length) bytes"
-          } else {
-            Write-Host "plugin.lib was not found at:"
-            Write-Host $pluginLib
-
-            Write-Host ""
-            Write-Host "Searching entire Plugin SDK for plugin.lib..."
-
-            $found = Get-ChildItem `
-              -Path "$env:PLUGIN_SDK_DIR" `
-              -Filter "plugin.lib" `
-              -Recurse `
-              -ErrorAction SilentlyContinue
-
-            if ($found.Count -gt 0) {
-              Write-Host ""
-              Write-Host "Found plugin.lib at:"
-              $found | Select-Object FullName, Length
-            } else {
-              Write-Host "plugin.lib was not found anywhere."
-            }
-          }
-
-      - name: Build radar-trilogy-sa
-        shell: powershell
-        working-directory: main-repo
-        run: |
-          Write-Host "========================================"
-          Write-Host "BUILD RADAR TRILOGY SA"
-          Write-Host "========================================"
-
-          $solution = Join-Path $PWD "radar-trilogy-sa.sln"
-
-          Write-Host ""
-          Write-Host "Solution:"
-          Write-Host $solution
-
-          Write-Host ""
+          Write-Host "Building radar-trilogy-sa..."
           Write-Host "Configuration: Release GTA-SA"
           Write-Host "Platform: Win32"
-          Write-Host "PlatformToolset: project-defined"
+          Write-Host "Platform Toolset: v145"
 
-          Write-Host ""
-          Write-Host "Starting MSBuild..."
-
-          msbuild "$solution" `
-            /m `
+          msbuild radar-trilogy-sa.sln `
             /p:Configuration="Release GTA-SA" `
             /p:Platform=Win32 `
+            /p:PlatformToolset=v145 `
             /p:PLUGIN_SDK_DIR="$env:PLUGIN_SDK_DIR" `
-            /verbosity:minimal
+            /m `
+            /v:minimal
 
           if ($LASTEXITCODE -ne 0) {
-            throw "radar-trilogy-sa build failed."
+              Write-Error "Radar project build failed."
+              exit $LASTEXITCODE
           }
 
-          Write-Host ""
-          Write-Host "MSBuild completed successfully."
-
-      - name: Verify ASI output
-        shell: powershell
-        working-directory: main-repo
+      - name: Verify Build Output
+        shell: pwsh
         run: |
-          Write-Host "========================================"
-          Write-Host "VERIFY ASI OUTPUT"
-          Write-Host "========================================"
+          $artifact = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "main-repo\bin\GTA-SA\Release\radar-trilogy-sa.asi"
 
-          $asi = Join-Path `
-            $PWD `
-            "bin\GTA-SA\Release\radar-trilogy-sa.asi"
+          Write-Host "Expected artifact:"
+          Write-Host $artifact
 
-          Write-Host ""
-          Write-Host "Expected output:"
-          Write-Host $asi
-
-          if (-not (Test-Path $asi)) {
-            Write-Host ""
-            Write-Host "radar-trilogy-sa.asi was NOT found."
-
-            Write-Host ""
-            Write-Host "Searching bin directory..."
-
-            if (Test-Path ".\bin") {
-              Get-ChildItem ".\bin" -Recurse |
-                Select-Object FullName, Length
-            } else {
-              Write-Host "bin directory does not exist."
-            }
-
-            throw "radar-trilogy-sa.asi was not generated."
+          if (Test-Path $artifact) {
+              Write-Host ""
+              Write-Host "BUILD SUCCESSFUL"
+              Write-Host "ASI file found."
+              Get-Item $artifact | Format-List Name,Length,LastWriteTime
+          }
+          else {
+              Write-Error "radar-trilogy-sa.asi was not found."
+              exit 1
           }
 
-          $file = Get-Item $asi
-
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "BUILD SUCCESSFUL"
-          Write-Host "========================================"
-          Write-Host ""
-          Write-Host "File:"
-          Write-Host $file.FullName
-          Write-Host ""
-          Write-Host "Size:"
-          Write-Host "$($file.Length) bytes"
-
-      - name: Upload radar-trilogy-sa.asi
+      - name: Upload Compiled ASI
         uses: actions/upload-artifact@v4
         with:
           name: radar-trilogy-sa
           path: main-repo/bin/GTA-SA/Release/radar-trilogy-sa.asi
           if-no-files-found: error
-          retention-days: 30
