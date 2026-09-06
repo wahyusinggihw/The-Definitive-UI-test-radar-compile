@@ -267,11 +267,11 @@ float CameraController::GetVehicleRollAngle(CPed* player) const
             return 0.0f;
 
         CVehicle*   vehicle    = player->m_pVehicle;
-        CMatrixLink* matrixLink = vehicle->GetMatrix();
-        if (!matrixLink)
-            return 0.0f;
+        CMatrixLink& matrixLink = vehicle->GetMatrix();
+        // if (!matrixLink)
+        //     return 0.0f;
 
-        return atan2f(-matrixLink->right.z, matrixLink->at.z);
+        return atan2f(-matrixLink.right.z, matrixLink.at.z);
     }
     catch (...) { return 0.0f; }
 }
@@ -284,9 +284,9 @@ float CameraController::GetVehiclePitchAngle(CPed* player) const
             return 0.0f;
 
         CVehicle*   vehicle    = player->m_pVehicle;
-        CMatrixLink* matrixLink = vehicle->GetMatrix();
-        if (!matrixLink)
-            return 0.0f;
+        CMatrixLink& matrixLink = vehicle->GetMatrix();
+        // if (!matrixLink)
+        //     return 0.0f;
 
         return asinf(matrixLink->up.z);
     }
