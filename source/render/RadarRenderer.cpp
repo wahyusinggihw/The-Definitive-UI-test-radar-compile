@@ -1783,7 +1783,7 @@ void RadarRenderer::RenderRadioText()
 
     // Получаем текущую станцию
     // signed char radioId = AERadioTrackManager.m_TempSettings.m_nCurrentRadioStation;
-    signed char radioId = AudioEngine.GetCurrentRadioStationID();
+    signed char radioId = AERadioTrackManager.GetCurrentRadioStationID();
     
     // Если радио выключено (ID > 12 или < 0), не рисуем
     if (radioId < 0 || radioId > 12)
