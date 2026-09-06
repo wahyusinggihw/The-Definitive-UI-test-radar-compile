@@ -31,7 +31,9 @@ jobs:
         shell: pwsh
         run: |
           $sdkPath = Join-Path $env:GITHUB_WORKSPACE "plugin-sdk"
-          "PLUGIN_SDK_DIR=$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+
+          "PLUGIN_SDK_DIR=$sdkPath" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
           Write-Host "PLUGIN_SDK_DIR = $sdkPath"
 
@@ -44,7 +46,9 @@ jobs:
           Write-Host ""
           Write-Host "Checking required enum directory..."
 
-          $enumPath = Join-Path $env:PLUGIN_SDK_DIR "Plugin_SA\game_sa\enums"
+          $enumPath = Join-Path `
+            $env:PLUGIN_SDK_DIR `
+            "Plugin_SA\game_sa\enums"
 
           if (Test-Path $enumPath) {
               Write-Host "Enum directory found:"
@@ -55,10 +59,109 @@ jobs:
               exit 1
           }
 
+      - name: Inspect Plugin SDK Build
+        shell: pwsh
+        run: |
+          Write-Host "========================================"
+          Write-Host "PLUGIN SDK BUILD INSPECTION"
+          Write-Host "========================================"
+
+          Write-Host ""
+          Write-Host "Plugin SDK path:"
+          Write-Host $env:PLUGIN_SDK_DIR
+
+          Write-Host ""
+          Write-Host "----------------------------------------"
+          Write-Host "Solution files"
+          Write-Host "----------------------------------------"
+
+          $solutions = Get-ChildItem `
+            -Path $env:PLUGIN_SDK_DIR `
+            -Filter "*.sln" `
+            -Recurse `
+            -ErrorAction SilentlyContinue
+
+          if ($solutions) {
+              $solutions |
+                Select-Object -ExpandProperty FullName
+          }
+          else {
+              Write-Host "No .sln files found."
+          }
+
+          Write-Host ""
+          Write-Host "----------------------------------------"
+          Write-Host "Project files related to Plugin SDK"
+          Write-Host "----------------------------------------"
+
+          $projects = Get-ChildItem `
+            -Path $env:PLUGIN_SDK_DIR `
+            -Filter "*.vcxproj" `
+            -Recurse `
+            -ErrorAction SilentlyContinue
+
+          if ($projects) {
+              $projects |
+                Select-Object -ExpandProperty FullName
+          }
+          else {
+              Write-Host "No .vcxproj files found."
+          }
+
+          Write-Host ""
+          Write-Host "----------------------------------------"
+          Write-Host "Existing output directory"
+          Write-Host "----------------------------------------"
+
+          $outputPath = Join-Path `
+            $env:PLUGIN_SDK_DIR `
+            "output"
+
+          if (Test-Path $outputPath) {
+              Write-Host "Output directory exists:"
+              Write-Host $outputPath
+
+              Get-ChildItem `
+                -Path $outputPath `
+                -Recurse `
+                -ErrorAction SilentlyContinue |
+                Select-Object FullName
+          }
+          else {
+              Write-Host "output directory does not exist yet."
+          }
+
+          Write-Host ""
+          Write-Host "----------------------------------------"
+          Write-Host "Searching for plugin.lib"
+          Write-Host "----------------------------------------"
+
+          $pluginLibs = Get-ChildItem `
+            -Path $env:PLUGIN_SDK_DIR `
+            -Filter "plugin*.lib" `
+            -Recurse `
+            -ErrorAction SilentlyContinue
+
+          if ($pluginLibs) {
+              Write-Host "Found library files:"
+              $pluginLibs |
+                Select-Object FullName
+          }
+          else {
+              Write-Host "No plugin*.lib files found."
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "END PLUGIN SDK INSPECTION"
+          Write-Host "========================================"
+
       - name: Patch Project Include Path
         shell: pwsh
         run: |
-          $projectFile = Join-Path $env:GITHUB_WORKSPACE "main-repo\radar-trilogy-sa.vcxproj"
+          $projectFile = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "main-repo\radar-trilogy-sa.vcxproj"
 
           if (-not (Test-Path $projectFile)) {
               Write-Error "Project file not found: $projectFile"
@@ -68,13 +171,23 @@ jobs:
           $content = Get-Content $projectFile -Raw
 
           $oldPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;'
-          $newPath = '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
 
-          if ($content.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;')) {
+          $newPath = `
+            '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa;' +
+            '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
+
+          if (
+            $content.Contains(
+              '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums;'
+            )
+          ) {
               Write-Host "Enum include path already exists."
           }
           else {
-              $content = $content.Replace($oldPath, $newPath)
+              $content = $content.Replace(
+                $oldPath,
+                $newPath
+              )
 
               Set-Content `
                 -Path $projectFile `
@@ -89,7 +202,11 @@ jobs:
 
           $check = Get-Content $projectFile -Raw
 
-          if ($check.Contains('$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums')) {
+          if (
+            $check.Contains(
+              '$(PLUGIN_SDK_DIR)\Plugin_SA\game_sa\enums'
+            )
+          ) {
               Write-Host "Enum include path successfully added."
           }
           else {
@@ -102,10 +219,14 @@ jobs:
         run: |
           cd "$env:GITHUB_WORKSPACE\main-repo"
 
-          Write-Host "Building radar-trilogy-sa..."
+          Write-Host "========================================"
+          Write-Host "BUILDING RADAR PROJECT"
+          Write-Host "========================================"
+
           Write-Host "Configuration: Release GTA-SA"
           Write-Host "Platform: Win32"
           Write-Host "Platform Toolset: v145"
+          Write-Host "PLUGIN_SDK_DIR: $env:PLUGIN_SDK_DIR"
 
           msbuild radar-trilogy-sa.sln `
             /p:Configuration="Release GTA-SA" `
@@ -134,7 +255,9 @@ jobs:
               Write-Host ""
               Write-Host "BUILD SUCCESSFUL"
               Write-Host "ASI file found."
-              Get-Item $artifact | Format-List Name,Length,LastWriteTime
+
+              Get-Item $artifact |
+                Format-List Name, Length, LastWriteTime
           }
           else {
               Write-Error "radar-trilogy-sa.asi was not found."
