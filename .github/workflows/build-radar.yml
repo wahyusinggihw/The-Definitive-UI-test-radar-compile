@@ -1,47 +1,60 @@
-name: Build Radar DLL
+name: Build Radar Plugin
 
 on:
   push:
-    branches: [ "only-radar-old" ]
+    branches:
+      - only-radar-old
   pull_request:
-    branches: [ "only-radar-old" ]
+    branches:
+      - only-radar-old
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          ref: only-radar-old
-          path: main-repo
+    # 1. Checkout kode dari branch only-radar-old
+    - name: Checkout Main Repository
+      uses: actions/checkout@v4
+      with:
+        ref: only-radar-old
 
-      - name: Checkout Plugin SDK
-        uses: actions/checkout@v4
-        with:
-          repository: DK22Pac/plugin-sdk
-          path: plugin-sdk
+    # 2. Checkout plugin-sdk ke folder terpisah
+    - name: Checkout plugin-sdk
+      uses: actions/checkout@v4
+      with:
+        repository: DK22Pac/plugin-sdk
+        path: plugin-sdk
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    # 3. Setup MSBuild (Visual Studio) terbaru
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
-      - name: Build Project with Plugin SDK
-        run: |
-          $env:PLUGIN_SDK_DIR = "$(Get-Location)\plugin-sdk"
-          echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
+    # 4. Set Environment Variable wajib untuk plugin-sdk
+    - name: Set PLUGIN_SDK_DIR Environment Variable
+      run: |
+        echo "PLUGIN_SDK_DIR=${{ github.workspace }}\plugin-sdk" >> $GITHUB_ENV
+      shell: bash
 
-          cd main-repo
-          msbuild radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32 /p:PlatformToolset=v143
+    # 5. Proses Restore NuGet (diabaikan jika proyek tidak memakainya)
+    - name: Restore NuGet Packages
+      run: nuget restore ${{ github.workspace }}\radar-trilogy-sa.sln
+      continue-on-error: true
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Compiled-Radar-ASI
-          path: |
-            main-repo/**/Release/*.asi
-            main-repo/**/Release/*.dll
+    # 6. Kompilasi Proyek dengan konfigurasi 'Release GTA-SA' dan platform 'Win32'
+    - name: Build Solution
+      run: |
+        msbuild ${{ github.workspace }}\radar-trilogy-sa.sln /p:Configuration="Release GTA-SA" /p:Platform=Win32
+      shell: cmd
+
+    # 7. Mengambil dan menyimpan hasil kompilasi (.asi atau .dll)
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: radar-trilogy-sa-release
+        path: |
+          **/Release GTA-SA/*.asi
+          **/Release GTA-SA/*.dll
+          **/bin/*.asi
+          **/bin/*.dll
