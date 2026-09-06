@@ -23,6 +23,7 @@ jobs:
         with:
           repository: DK22Pac/plugin-sdk
           path: plugin-sdk
+          submodules: recursive
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -37,124 +38,149 @@ jobs:
 
           Write-Host "PLUGIN_SDK_DIR = $sdkPath"
 
-      - name: Check Plugin SDK
+      - name: Check Plugin SDK Source
         shell: pwsh
         run: |
-          Write-Host "Plugin SDK path:"
-          Write-Host $env:PLUGIN_SDK_DIR
-
-          Write-Host ""
-          Write-Host "Checking required enum directory..."
+          Write-Host "========================================"
+          Write-Host "CHECKING PLUGIN SDK SOURCE"
+          Write-Host "========================================"
+          Write-Host "Plugin SDK path: $env:PLUGIN_SDK_DIR"
 
           $enumPath = Join-Path `
             $env:PLUGIN_SDK_DIR `
             "Plugin_SA\game_sa\enums"
 
           if (Test-Path $enumPath) {
-              Write-Host "Enum directory found:"
-              Write-Host $enumPath
+              Write-Host "Enum directory found: $enumPath"
           }
           else {
-              Write-Error "Enum directory not found!"
+              Write-Error "Enum directory not found: $enumPath"
               exit 1
           }
 
-      - name: Inspect Plugin SDK Build
+          $generator = Join-Path `
+            $env:PLUGIN_SDK_DIR `
+            "tools\generate\Visual Studio.bat"
+
+          if (Test-Path $generator) {
+              Write-Host "Visual Studio generator found: $generator"
+          }
+          else {
+              Write-Error "Visual Studio generator not found: $generator"
+              exit 1
+          }
+
+      - name: Generate Plugin SDK Visual Studio Projects
+        shell: cmd
+        run: |
+          cd /d "%PLUGIN_SDK_DIR%"
+          set PLUGIN_SDK_DIR=%GITHUB_WORKSPACE%\plugin-sdk
+
+          echo ========================================
+          echo GENERATING PLUGIN SDK VISUAL STUDIO PROJECTS
+          echo ========================================
+          echo PLUGIN_SDK_DIR=%PLUGIN_SDK_DIR%
+          echo.
+
+          call "tools\generate\Visual Studio.bat"
+
+          if errorlevel 1 (
+            echo Failed to generate Plugin SDK Visual Studio projects.
+            exit /b 1
+          )
+
+      - name: Verify Generated Plugin SDK Project
         shell: pwsh
         run: |
           Write-Host "========================================"
-          Write-Host "PLUGIN SDK BUILD INSPECTION"
+          Write-Host "VERIFYING GENERATED PLUGIN SDK PROJECT"
           Write-Host "========================================"
 
-          Write-Host ""
-          Write-Host "Plugin SDK path:"
-          Write-Host $env:PLUGIN_SDK_DIR
+          $solution = Join-Path $env:PLUGIN_SDK_DIR "plugin.sln"
 
-          Write-Host ""
-          Write-Host "----------------------------------------"
-          Write-Host "Solution files"
-          Write-Host "----------------------------------------"
-
-          $solutions = Get-ChildItem `
-            -Path $env:PLUGIN_SDK_DIR `
-            -Filter "*.sln" `
-            -Recurse `
-            -ErrorAction SilentlyContinue
-
-          if ($solutions) {
-              $solutions |
-                Select-Object -ExpandProperty FullName
+          if (Test-Path $solution) {
+              Write-Host "Plugin SDK solution found:"
+              Write-Host $solution
           }
           else {
-              Write-Host "No .sln files found."
+              Write-Error "plugin.sln was not generated."
+              Write-Host "Generated solution files:"
+              Get-ChildItem `
+                -Path $env:PLUGIN_SDK_DIR `
+                -Filter "*.sln" `
+                -Recurse `
+                -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty FullName
+              exit 1
           }
 
           Write-Host ""
-          Write-Host "----------------------------------------"
-          Write-Host "Project files related to Plugin SDK"
-          Write-Host "----------------------------------------"
-
-          $projects = Get-ChildItem `
+          Write-Host "Plugin SDK projects:"
+          Get-ChildItem `
             -Path $env:PLUGIN_SDK_DIR `
             -Filter "*.vcxproj" `
             -Recurse `
-            -ErrorAction SilentlyContinue
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
 
-          if ($projects) {
-              $projects |
-                Select-Object -ExpandProperty FullName
+      - name: Build Plugin SDK - GTA San Andreas
+        shell: cmd
+        run: |
+          cd /d "%PLUGIN_SDK_DIR%"
+
+          echo ========================================
+          echo BUILDING PLUGIN SDK - GTA SAN ANDREAS
+          echo ========================================
+          echo Configuration: Release
+          echo Platform: Mixed Platforms
+          echo Target: plugin_sa
+          echo.
+
+          msbuild plugin.sln ^
+            /property:Configuration=Release ^
+            /property:Platform="Mixed Platforms" ^
+            /target:plugin_sa ^
+            /m ^
+            /verbosity:minimal
+
+          if errorlevel 1 (
+            echo Plugin SDK GTA San Andreas build failed.
+            exit /b 1
+          )
+
+      - name: Verify Plugin SDK Library
+        shell: pwsh
+        run: |
+          Write-Host "========================================"
+          Write-Host "VERIFYING PLUGIN SDK LIBRARY"
+          Write-Host "========================================"
+
+          $pluginLib = Join-Path `
+            $env:PLUGIN_SDK_DIR `
+            "output\lib\plugin.lib"
+
+          Write-Host "Expected library:"
+          Write-Host $pluginLib
+
+          if (Test-Path $pluginLib) {
+              Write-Host ""
+              Write-Host "Plugin SDK library found."
+              Get-Item $pluginLib |
+                Format-List Name, Length, LastWriteTime
           }
           else {
-              Write-Host "No .vcxproj files found."
-          }
-
-          Write-Host ""
-          Write-Host "----------------------------------------"
-          Write-Host "Existing output directory"
-          Write-Host "----------------------------------------"
-
-          $outputPath = Join-Path `
-            $env:PLUGIN_SDK_DIR `
-            "output"
-
-          if (Test-Path $outputPath) {
-              Write-Host "Output directory exists:"
-              Write-Host $outputPath
-
+              Write-Host ""
+              Write-Host "Available plugin libraries:"
               Get-ChildItem `
-                -Path $outputPath `
+                -Path $env:PLUGIN_SDK_DIR `
+                -Filter "plugin*.lib" `
                 -Recurse `
                 -ErrorAction SilentlyContinue |
                 Select-Object FullName
-          }
-          else {
-              Write-Host "output directory does not exist yet."
-          }
 
-          Write-Host ""
-          Write-Host "----------------------------------------"
-          Write-Host "Searching for plugin.lib"
-          Write-Host "----------------------------------------"
-
-          $pluginLibs = Get-ChildItem `
-            -Path $env:PLUGIN_SDK_DIR `
-            -Filter "plugin*.lib" `
-            -Recurse `
-            -ErrorAction SilentlyContinue
-
-          if ($pluginLibs) {
-              Write-Host "Found library files:"
-              $pluginLibs |
-                Select-Object FullName
+              Write-Error "Required Plugin SDK library plugin.lib was not found."
+              exit 1
           }
-          else {
-              Write-Host "No plugin*.lib files found."
-          }
-
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "END PLUGIN SDK INSPECTION"
-          Write-Host "========================================"
 
       - name: Patch Project Include Path
         shell: pwsh
