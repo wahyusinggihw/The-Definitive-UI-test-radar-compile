@@ -32,9 +32,9 @@ jobs:
         $sdkPath = "$(Get-Location)\plugin-sdk"
         $env:PLUGIN_SDK_DIR = $sdkPath
         
-        # Kompilasi internal plugin-sdk agar menghasilkan berkas plugin.lib
-        cd plugin-sdk
-        msbuild plugin_sa.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
+        cd plugin-sdk\plugin_sa
+        # Mengompilasi berkas proyek .vcxproj secara langsung dengan konfigurasi Release asli SDK
+        msbuild plugin_sa.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
 
     - name: Build Project with Plugin SDK
       run: |
@@ -42,7 +42,7 @@ jobs:
         $env:PLUGIN_SDK_DIR = $sdkPath
         echo "PLUGIN_SDK_DIR is set to: $env:PLUGIN_SDK_DIR"
         
-        # Pengamanan tanda kutip luar-dalam agar MSBuild tidak memecah tanda titik koma (;)
+        # Menyusun folder pencarian berkas include dan library (.lib)
         $includeDirs = "${sdkPath}\shared;${sdkPath}\plugin_sa;${sdkPath}\plugin_sa\game_sa"
         $libDirs = "${sdkPath}\output"
         
